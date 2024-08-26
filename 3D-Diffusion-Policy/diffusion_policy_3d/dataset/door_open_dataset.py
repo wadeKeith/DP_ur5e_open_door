@@ -3,17 +3,19 @@ import torch
 import numpy as np
 import copy
 from diffusion_policy_3d.common.pytorch_util import dict_apply
-from diffusion_policy_3d.common.replay_buffer import ReplayBuffer
+from diffusion_policy_3d.common.replaybuffer_door import ReplayBuffer
 from diffusion_policy_3d.common.sampler import (
     SequenceSampler, get_val_mask, downsample_mask)
 from diffusion_policy_3d.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
 from diffusion_policy_3d.dataset.base_dataset import BaseDataset
 import os
 
+
 data_dir_path_abs = '/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy'
-class RealDexDataset(BaseDataset):
+
+class DoorOpenDataset(BaseDataset):
     def __init__(self,
-            zarr_path, 
+            data_path, 
             horizon=1,
             pad_before=0,
             pad_after=0,
@@ -24,8 +26,8 @@ class RealDexDataset(BaseDataset):
             ):
         super().__init__()
         self.task_name = task_name
-        self.replay_buffer = ReplayBuffer.copy_from_path(
-            os.path.join(data_dir_path_abs,zarr_path), keys=['state', 'action', 'point_cloud', 'img'])
+        self.replay_buffer = ReplayBuffer(
+            os.path.join(data_dir_path_abs,data_path))
         val_mask = get_val_mask(
             n_episodes=self.replay_buffer.n_episodes, 
             val_ratio=val_ratio,
@@ -63,11 +65,11 @@ class RealDexDataset(BaseDataset):
         data = {
             'action': self.replay_buffer['action'],
             'agent_pos': self.replay_buffer['state'][...,:],
-            'point_cloud': self.replay_buffer['point_cloud'],
+            'img': self.replay_buffer['img'],
+            'depth': self.replay_buffer['depth'],
         }
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
-        # normalizer['point_cloud'] = SingleFieldLinearNormalizer.create_identity()
         return normalizer
 
     def __len__(self) -> int:
@@ -75,11 +77,14 @@ class RealDexDataset(BaseDataset):
 
     def _sample_to_data(self, sample):
         agent_pos = sample['state'][:,].astype(np.float32) # (agent_posx2, block_posex3)
-        point_cloud = sample['point_cloud'][:,].astype(np.float32) # (T, 1024, 6)
+        img = sample['img'][:,].astype(np.float32)
+        depth = sample['depth'][:,].astype(np.float32)
+        # point_cloud = sample['point_cloud'][:,].astype(np.float32) # (T, 1024, 6)
 
         data = {
             'obs': {
-                'point_cloud': point_cloud, # T, 1024, 6
+                'img': img, # T, 3, 224, 224
+                'depth': depth, # T, 1, 224, 224
                 'agent_pos': agent_pos, # T, D_pos
             },
             'action': sample['action'].astype(np.float32) # T, D_action
@@ -91,4 +96,6 @@ class RealDexDataset(BaseDataset):
         data = self._sample_to_data(sample)
         torch_data = dict_apply(data, torch.from_numpy)
         return torch_data
+
+
 

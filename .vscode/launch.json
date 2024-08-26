@@ -12,12 +12,12 @@
             "console": "integratedTerminal",
             "args": [
                 "--config-name=dp3.yaml",
-                "task=adroit_door",
-                "hydra.run.dir=data/outputs/adroit_door-dp3-0811_seed429",
+                "task=real_door_open",
+                "hydra.run.dir=data/outputs/real_door_open-dp3-0811_seed429",
                 "training.debug=False",
                 "training.seed=429",
                 "training.device=cuda:0",
-                "exp_name=adroit_door-dp3-0811",
+                "exp_name=real_door_open-dp3-0811",
                 "logging.mode=offline",
                 "checkpoint.save_ckpt=True"
             ]

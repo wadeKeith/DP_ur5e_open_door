@@ -1,7 +1,7 @@
 from typing import Optional
 import numpy as np
 import numba
-from diffusion_policy_3d.common.replay_buffer import ReplayBuffer
+from diffusion_policy_3d.common.replaybuffer_door import ReplayBuffer
 
 
 @numba.jit(nopython=True)

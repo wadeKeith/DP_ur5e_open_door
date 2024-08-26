@@ -1,0 +1,33 @@
+name: realdex_drill
+
+task_name: drill
+
+shape_meta: &shape_meta
+  # acceptable types: rgb, low_dim
+  obs:
+    # point_cloud:
+    #   shape: [512, 3]
+    #   type: point_cloud
+    img:
+      shape: [3, 224, 224]
+      type: img
+    depth:
+      shape: [1, 224, 224]
+      type: depth
+    agent_pos:
+      shape: [7]
+      type: low_dim
+  action:
+    shape: [7]
+
+env_runner: null
+
+dataset:
+  _target_: diffusion_policy_3d.dataset.door_open_dataset.DoorOpenDataset
+  data_path: data/real_door
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0
+  max_train_episodes: 90
