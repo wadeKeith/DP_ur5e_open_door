@@ -1,0 +1,1 @@
+{"train_loss": 2.106181580886966e-07, "global_step": 20999, "epoch": 2999, "lr": 0.0, "bc_loss": 2.5129952518909704e-07, "_timestamp": 1724709594.139668, "_runtime": 11654.738127946854, "_step": 20999, "train_action_mse_error": 1.231166208981449e-07, "test_mean_score": -2.106181580886966e-07, "_wandb": {"runtime": 11653}}
