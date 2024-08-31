@@ -4,3 +4,8 @@
 *.mp4v
 *.npy
 *.ckpt
+*.json
+*.log
+*.txt
+*.wandb
+

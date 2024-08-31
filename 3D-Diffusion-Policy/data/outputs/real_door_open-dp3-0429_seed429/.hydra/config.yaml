@@ -3,18 +3,30 @@ task:
   task_name: drill
   shape_meta:
     obs:
-      img:
+      top_img:
         shape:
         - 3
         - 224
         - 224
-        type: img
-      depth:
+        type: top_img
+      top_depth:
         shape:
         - 1
         - 224
         - 224
-        type: depth
+        type: top_depth
+      right_img:
+        shape:
+        - 3
+        - 224
+        - 224
+        type: right_img
+      right_depth:
+        shape:
+        - 1
+        - 224
+        - 224
+        type: right_depth
       agent_pos:
         shape:
         - 7
@@ -76,9 +88,14 @@ policy:
   rgbd_network_backbone: DFormer_Base
   rgbd_encoder_cfg:
     rgbd_network_backbone: ${policy.rgbd_network_backbone}
+    block_channel:
+    - 64
+    - 128
+    - 256
     out_channels: ${policy.encoder_output_dim}
     use_layernorm: true
     final_norm: layernorm
+    camera_num: 2
 ema:
   _target_: diffusion_policy_3d.model.diffusion.ema_model.EMAModel
   update_after_step: 0

@@ -55,9 +55,14 @@ policy:
 
   rgbd_encoder_cfg:
     rgbd_network_backbone: ${policy.rgbd_network_backbone}
+    block_channel:
+    - 64
+    - 128
+    - 256
     out_channels: ${policy.encoder_output_dim}
     use_layernorm: true
     final_norm: layernorm # layernorm, none
+    camera_num: 2
 
 
 ema:

@@ -53,22 +53,23 @@ def create_mlp(
 class RGBDEncoder(nn.Module):
     def __init__(self,
                  rgbd_network_backbone: str='DFormer_Base',
+                 block_channel: list=[64, 128, 256],
                  out_channels: int=1024,
                  use_layernorm: bool=False,
                  final_norm: str='none',
+                 camera_num = 1,
                  **kwargs
                  ):
         super().__init__()
-        block_channel = [64, 128, 256]
 
         if rgbd_network_backbone == 'DFormer_Tiny':
-            in_channels = 384
+            in_channels = 384 * camera_num
         elif rgbd_network_backbone == 'DFormer_Small':
-            in_channels = 768
+            in_channels = 768 * camera_num
         elif rgbd_network_backbone == 'DFormer_Base':
-            in_channels = 768
+            in_channels = 768 * camera_num
         elif rgbd_network_backbone == 'DFormer_Large':
-            in_channels = 864
+            in_channels = 864 * camera_num
         else:
             raise NotImplementedError(f"RGBDEncoder backbone only supports 4 types, but got {rgbd_network_backbone}")
 
@@ -116,21 +117,29 @@ class DP3Encoder(nn.Module):
                  rgbd_encoder_cfg = None
                  ):
         super().__init__()
-        self.depth_image_key = 'depth'
+        self.top_rgb_image_key = 'top_img'
+        self.top_depth_image_key = 'top_depth'
+        self.right_rgb_image_key = 'right_img'
+        self.right_depth_image_key = 'right_depth'
         self.state_key = 'agent_pos'
-        self.rgb_image_key = 'img'
-        self.n_output_channels = out_channel
         
-        self.rgb_image_shape = observation_space[self.rgb_image_key]
-        self.depth_image_shape = observation_space[self.depth_image_key]
+        self.n_output_channels = out_channel
+        self.camera_num = 2
+        
+        self.top_rgb_image_shape = observation_space[self.top_rgb_image_key]
+        self.right_rgb_image_shape = observation_space[self.right_rgb_image_key]
+        self.top_depth_image_shape = observation_space[self.top_depth_image_key]
+        self.right_depth_image_shape = observation_space[self.right_depth_image_key]
         self.state_shape = observation_space[self.state_key]
 
             
         
         
-        cprint(f"[DP3Encoder] rgb image shape: {self.rgb_image_shape}", "yellow")
+        cprint(f"[DP3Encoder] top rgb image shape: {self.top_rgb_image_shape}", "yellow")
+        cprint(f"[DP3Encoder] right rgb image shape: {self.right_rgb_image_shape}", "yellow")
+        cprint(f"[DP3Encoder] top depth image shape: {self.top_depth_image_shape}", "yellow")
+        cprint(f"[DP3Encoder] right depth image shape: {self.right_depth_image_shape}", "yellow")
         cprint(f"[DP3Encoder] state shape: {self.state_shape}", "yellow")
-        cprint(f"[DP3Encoder] depth image shape: {self.depth_image_shape}", "yellow")
         cprint("[DP3Encoder] rgbd_network_backbone: {}".format(rgbd_network_backbone), 'yellow')
         
 
@@ -168,16 +177,21 @@ class DP3Encoder(nn.Module):
 
 
     def forward(self, observations: Dict) -> torch.Tensor:
-        img = observations[self.rgb_image_key]
-        depth = observations[self.depth_image_key]
-        vision = torch.cat([img,depth],dim=1)
-        assert len(vision.shape) == 4, cprint(f"vision shape: {vision.shape}, length should be 4", "red")
+        top_img = observations[self.top_rgb_image_key]
+        top_depth = observations[self.top_depth_image_key]
+        right_img = observations[self.right_rgb_image_key]
+        right_depth = observations[self.right_depth_image_key]
+        top_vision = torch.cat([top_img,top_depth],dim=1)
+        right_vision = torch.cat([right_img,right_depth], dim=1)
+        assert len(top_vision.shape) == 4, cprint(f"top vision shape: {top_vision.shape}, length should be 4", "red")
+        assert len(right_vision.shape) == 4, cprint(f"right vision shape: {right_vision.shape}, length should be 4", "red")
         with torch.no_grad():
-            vision_feat = self.extractor(vision)    # B * out_channel
-        rgbd_feat = self.rgbd_encoder(vision_feat)
+            top_vision_feat = self.extractor(top_vision)    # B * Dformer_out_dim
+            right_vision_feat = self.extractor(right_vision)    # B * Dformer_out_dim
+        rgbd_feat = self.rgbd_encoder(torch.cat([top_vision_feat, right_vision_feat], dim=-1)) # B* encoder_out_dim
             
         state = observations[self.state_key]
-        state_feat = self.state_mlp(state)  # B * 64
+        state_feat = self.state_mlp(state)  # B * encoder_out_dim
         final_feat = torch.cat([rgbd_feat, state_feat], dim=-1)
         return final_feat
 
