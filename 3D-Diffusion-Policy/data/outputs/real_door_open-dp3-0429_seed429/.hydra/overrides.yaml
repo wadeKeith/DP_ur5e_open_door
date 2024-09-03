@@ -1,7 +1,0 @@
-- task=real_door_open
-- training.debug=False
-- training.seed=429
-- training.device=cuda:0
-- exp_name=real_door_open-dp3-0429
-- logging.mode=online
-- checkpoint.save_ckpt=True
