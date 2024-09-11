@@ -65,10 +65,10 @@ class DoorOpenDataset(BaseDataset):
         data = {
             'action': self.replay_buffer['action'],
             'agent_pos': self.replay_buffer['state'][...,:],
-            'top_img': self.replay_buffer['top_img'],
-            'top_depth': self.replay_buffer['top_depth'],
-            'right_img': self.replay_buffer['right_img'],
-            'right_depth': self.replay_buffer['right_depth'],
+            'top_rgbd': self.replay_buffer['top_rgbd'],
+            # 'top_depth': self.replay_buffer['top_depth'],
+            'right_rgbd': self.replay_buffer['right_rgbd'],
+            # 'right_depth': self.replay_buffer['right_depth'],
         }
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)

@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": [
-        "./3D-Diffusion-Policy"
+        "./3D-Diffusion-Policy",
+        "./3D-Diffusion-Policy/diffusion_policy_3d/model/vision"
     ]
 }

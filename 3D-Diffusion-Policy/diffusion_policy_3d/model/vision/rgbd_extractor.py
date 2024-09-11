@@ -4,10 +4,12 @@ import torch.nn.functional as F
 import torchvision
 import copy
 import time
-
+import sys
+sys.path.append("/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision")
+# sys.path.insert(0, '/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision')
 from typing import Optional, Dict, Tuple, Union, List, Type
 from termcolor import cprint
-from .DFormer import DFormer_Base, DFormer_Large, DFormer_Small, DFormer_Tiny
+from DFormer import DFormer_Base, DFormer_Large, DFormer_Small, DFormer_Tiny
 
 def create_mlp(
         input_dim: int,
@@ -50,63 +52,115 @@ def create_mlp(
 
 
 
-class RGBDEncoder(nn.Module):
-    def __init__(self,
-                 rgbd_network_backbone: str='DFormer_Base',
-                 block_channel: list=[64, 128, 256],
-                 out_channels: int=1024,
-                 use_layernorm: bool=False,
-                 final_norm: str='none',
-                 camera_num = 1,
-                 **kwargs
+
+class QuickGELU(torch.nn.Module):
+   def forward(self, x: torch.Tensor):
+       return x * torch.sigmoid(1.702 * x)
+   
+class CLVEAttentiveLayer(nn.Module):
+    def __init__(self, n_head, d_embed):
+        super().__init__()
+        self.layernorm_1 = nn.LayerNorm(d_embed)
+        # self.attention = SelfAttention(n_head, d_embed)
+        self.attention = nn.MultiheadAttention(d_embed, n_head, batch_first=True)
+        self.layernorm_2 = nn.LayerNorm(d_embed)
+        self.linear_1 = nn.Linear(d_embed, 4 * d_embed)
+        self.linear_2 = nn.Linear(4 * d_embed, d_embed)
+        self.activation = QuickGELU()
+
+    def forward(self, x, causal_mask):
+        residue = x
+        x = self.layernorm_1(x)
+        # x = self.attention(x, causal_mask = True)
+        x, _ = self.attention(x, x, x, is_causal = True, attn_mask = causal_mask) if causal_mask is not None else self.attention(x, x, x)
+        x += residue
+        residue = x
+        x = self.layernorm_2(x)
+        x = self.linear_1(x)
+        x = self.activation(x)
+        x = self.linear_2(x)
+        x += residue
+        return x
+   
+class CLVEProjectionHead(nn.Module):
+    def __init__(self, input_dim, output_dim, dropout):
+        super().__init__()
+        input_dim = input_dim
+        self.projection = nn.Linear(input_dim, output_dim)
+        self.gelu = QuickGELU()
+        self.fc = nn.Linear(output_dim, output_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(output_dim)
+
+    def forward(self, x):
+        projected = self.projection(x)
+        x = self.gelu(projected)
+        x = self.fc(x)
+        x = self.dropout(x)
+        x += projected
+        x = self.layer_norm(x)
+        return x 
+
+class CLVE(nn.Module):
+    def __init__(self, 
+                 rgbd_encoder_cfg = None
                  ):
         super().__init__()
-
-        if rgbd_network_backbone == 'DFormer_Tiny':
-            in_channels = 384 * camera_num
-        elif rgbd_network_backbone == 'DFormer_Small':
-            in_channels = 768 * camera_num
-        elif rgbd_network_backbone == 'DFormer_Base':
-            in_channels = 768 * camera_num
-        elif rgbd_network_backbone == 'DFormer_Large':
-            in_channels = 864 * camera_num
+        self.rgbd_network_backbone = rgbd_encoder_cfg.rgbd_network_backbone
+        if self.rgbd_network_backbone == 'DFormer_Tiny':
+            self.extractor = DFormer_Tiny(pretrained = True)
+            self.d_embed = 384
+        elif self.rgbd_network_backbone == 'DFormer_Small':
+            self.extractor = DFormer_Small(pretrained = True)
+            self.d_embed = 768
+        elif self.rgbd_network_backbone == 'DFormer_Base':
+            self.extractor = DFormer_Base(pretrained = True)
+            self.d_embed = 768
+        elif self.rgbd_network_backbone == 'DFormer_Large':
+            self.extractor = DFormer_Large(pretrained = True)
+            self.d_embed = 864
         else:
-            raise NotImplementedError(f"RGBDEncoder backbone only supports 4 types, but got {rgbd_network_backbone}")
-
-        cprint("[RGBDEncoder] use_layernorm: {}".format(use_layernorm), 'cyan')
-        cprint("[RGBDEncoder] use_final_norm: {}".format(final_norm), 'cyan')
-        cprint(f"[RGBDEncoder] input channals: {in_channels}", 'cyan')
-
-        self.mlp = nn.Sequential(
-            nn.Linear(in_channels, block_channel[0]),
-            nn.LayerNorm(block_channel[0]) if use_layernorm else nn.Identity(),
-            nn.ReLU(),
-            nn.Linear(block_channel[0], block_channel[1]),
-            nn.LayerNorm(block_channel[1]) if use_layernorm else nn.Identity(),
-            nn.ReLU(),
-            nn.Linear(block_channel[1], block_channel[2]),
-            nn.LayerNorm(block_channel[2]) if use_layernorm else nn.Identity(),
-            nn.ReLU(),
-        )
+            raise NotImplementedError(f"rgbd_network_backbone: {self.rgbd_network_backbone}")
+        del self.extractor.pred
+        self.extractor.eval()
+        # self.extractor.requires_grad_(False)
+        for p in self.extractor.parameters():
+            p.requires_grad = False
         
-        
-        if final_norm == 'layernorm':
-            self.final_projection = nn.Sequential(
-                nn.Linear(block_channel[-1], out_channels),
-                nn.LayerNorm(out_channels)
-            )
-        elif final_norm == 'none':
-            self.final_projection = nn.Linear(block_channel[-1], out_channels)
-        else:
-            raise NotImplementedError(f"final_norm: {final_norm}")
-         
-         
-    def forward(self, x):
-        x = self.mlp(x)
-        # x = torch.max(x, 1)[0]
-        x = self.final_projection(x)
-        return x
+        self.image_size = 300
+        self.attention_layers = nn.ModuleList([
+            CLVEAttentiveLayer(rgbd_encoder_cfg.num_heads, self.d_embed) 
+            for i in range(rgbd_encoder_cfg.num_layers_clve_attentive)])
+        self.linear = nn.Linear(self.image_size , 1)
+        self.projection_head = CLVEProjectionHead(input_dim=self.d_embed, output_dim=rgbd_encoder_cfg.out_channels, dropout=rgbd_encoder_cfg.dropout)
 
+
+    def forward(self, rgbd) -> torch.Tensor:
+        with torch.no_grad():
+            rgbd_feat = self.extractor(rgbd)
+        batch, channels, h, w = rgbd_feat.shape[0], rgbd_feat.shape[1], rgbd_feat.shape[2], rgbd_feat.shape[3]
+        rgbd_feat = rgbd_feat.view(batch, channels, h *w).swapaxes(1,2)
+        for layer in self.attention_layers:
+            state = layer(rgbd_feat, None)   # causal mask not needed for image features
+        out = self.linear(state.swapaxes(2,1)).squeeze(-1)
+        out = self.projection_head(out)
+        # out = out.swapaxes(1,2).mean([-1])
+        return out
+
+class CLVEModel(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.image_encoder = CLVE(cfg)
+        self.epoch = 0
+        self.step = 0
+
+    def load_checkpoint(self, path):
+        self.load_state_dict(torch.load(path))
+
+    def forward(self, image_a, image_b):
+        image_embed_a = self.image_encoder(image_a)
+        image_embed_b = self.image_encoder(image_b)
+        return image_embed_a, image_embed_b
 
 class DP3Encoder(nn.Module):
     def __init__(self, 
@@ -143,25 +197,25 @@ class DP3Encoder(nn.Module):
         cprint("[DP3Encoder] rgbd_network_backbone: {}".format(rgbd_network_backbone), 'yellow')
         
 
-        self.rgbd_network_backbone = rgbd_network_backbone
-        if rgbd_network_backbone == 'DFormer_Tiny':
-            self.extractor = DFormer_Tiny(pretrained = True)
-        elif rgbd_network_backbone == 'DFormer_Small':
-            self.extractor = DFormer_Small(pretrained = True)
-        elif rgbd_network_backbone == 'DFormer_Base':
-            self.extractor = DFormer_Base(pretrained = True)
-        elif rgbd_network_backbone == 'DFormer_Large':
-            self.extractor = DFormer_Large(pretrained = True)
-        else:
-            raise NotImplementedError(f"rgbd_network_backbone: {rgbd_network_backbone}")
-        del self.extractor.pred
-        self.extractor.eval()
-        # self.extractor.requires_grad_(False)
-        for p in self.extractor.parameters():
-            p.requires_grad = False
+        # self.rgbd_network_backbone = rgbd_network_backbone
+        # if rgbd_network_backbone == 'DFormer_Tiny':
+        #     self.extractor = DFormer_Tiny(pretrained = True)
+        # elif rgbd_network_backbone == 'DFormer_Small':
+        #     self.extractor = DFormer_Small(pretrained = True)
+        # elif rgbd_network_backbone == 'DFormer_Base':
+        #     self.extractor = DFormer_Base(pretrained = True)
+        # elif rgbd_network_backbone == 'DFormer_Large':
+        #     self.extractor = DFormer_Large(pretrained = True)
+        # else:
+        #     raise NotImplementedError(f"rgbd_network_backbone: {rgbd_network_backbone}")
+        # del self.extractor.pred
+        # self.extractor.eval()
+        # # self.extractor.requires_grad_(False)
+        # for p in self.extractor.parameters():
+        #     p.requires_grad = False
         
 
-        self.rgbd_encoder = RGBDEncoder(**rgbd_encoder_cfg)
+        self.rgbd_encoder = CLVE(**rgbd_encoder_cfg)
         if len(state_mlp_size) == 0:
             raise RuntimeError(f"State mlp size is empty")
         elif len(state_mlp_size) == 1:
