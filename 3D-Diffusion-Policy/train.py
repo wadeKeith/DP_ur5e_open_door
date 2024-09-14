@@ -103,7 +103,19 @@ class TrainDP3Workspace:
         assert isinstance(dataset, BaseDataset), print(f"dataset must be BaseDataset, got {type(dataset)}")
         # test = dataset[0]
         train_dataloader = DataLoader(dataset, **cfg.dataloader)
-        normalizer = dataset.get_normalizer()
+        if cfg.policy.rgbd_encoder_cfg.load_rgbd_encoder:
+            # prefix_ls = ['top_rgbd', 'right_rgbd']
+            # rgbd_normalizer = torch.load(cfg.policy.rgbd_encoder_cfg.checkpoint_path, weights_only=False)['normalizer.pth']
+            normalizer = dataset.get_normalizer()
+            # for prefix in prefix_ls:
+            #     for key, value in rgbd_normalizer.items():
+            #         split_key = key.split('.')
+            #         if len(split_key) == 3:
+            #             normalizer.params_dict[prefix][split_key[-1]] = value
+            #         elif len(split_key) == 4:
+            #             normalizer.params_dict[prefix][split_key[-2]][split_key[-1]] = value
+        else:
+            normalizer = dataset.get_normalizer()
 
         # configure validation dataset
         val_dataset = dataset.get_validation_dataset()

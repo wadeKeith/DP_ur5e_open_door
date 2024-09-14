@@ -8,10 +8,10 @@ from timm.models.registry import register_model
 from timm.models.vision_transformer import _cfg
 import math
 
-model_checkpoint_type = {'DFormer_Large':'/home/zxr/Documents/Github/DP_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision/checkpoint/DFormer_Large.pth.tar',
-                         'DFormer_Base': '/home/zxr/Documents/Github/DP_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision/checkpoint/DFormer_Base.pth.tar',
-                         'DFormer_Small': '/home/zxr/Documents/Github/DP_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision/checkpoint/DFormer_Small.pth.tar',
-                         'DFormer_Tiny': '/home/zxr/Documents/Github/DP_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision/checkpoint/DFormer_Tiny.pth.tar',}
+model_checkpoint_type = {'DFormer_Large':'/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision/checkpoint/DFormer_Large.pth.tar',
+                         'DFormer_Base': '/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision/checkpoint/DFormer_Base.pth.tar',
+                         'DFormer_Small': '/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision/checkpoint/DFormer_Small.pth.tar',
+                         'DFormer_Tiny': '/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision/checkpoint/DFormer_Tiny.pth.tar',}
 
 class MLP(nn.Module):
     def __init__(self, dim, mlp_ratio=4):
@@ -239,7 +239,8 @@ class DFormer_model(nn.Module):
             x_e = x_e.permute(0, 3, 1, 2)
         # x = self.norm(x)
         x = torch.cat([x,x_e],dim=1) 
-        return x.mean([-2, -1]) # global average pooling, (N, C, H, W) -> (N, C)
+        # return x.mean([-2, -1]) # global average pooling, (N, C, H, W) -> (N, C)
+        return x
 
     # def forward(self, x):
     #     x = self.forward_features(x)

@@ -6,6 +6,7 @@ import copy
 import time
 import sys
 sys.path.append("/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision")
+import os
 # sys.path.insert(0, '/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/diffusion_policy_3d/model/vision')
 from typing import Optional, Dict, Tuple, Union, List, Type
 from termcolor import cprint
@@ -134,7 +135,6 @@ class CLVE(nn.Module):
         self.linear = nn.Linear(self.image_size , 1)
         self.projection_head = CLVEProjectionHead(input_dim=self.d_embed, output_dim=rgbd_encoder_cfg.out_channels, dropout=rgbd_encoder_cfg.dropout)
 
-
     def forward(self, rgbd) -> torch.Tensor:
         with torch.no_grad():
             rgbd_feat = self.extractor(rgbd)
@@ -165,57 +165,37 @@ class CLVEModel(nn.Module):
 class DP3Encoder(nn.Module):
     def __init__(self, 
                  observation_space: Dict, 
-                 out_channel=256,
+                #  out_channel=256,
+                camera_num = 1,
                  state_mlp_size=(64, 64), state_mlp_activation_fn=nn.ReLU,
-                 rgbd_network_backbone='DFormer_Base',
+                #  rgbd_network_backbone='DFormer_Base',
                  rgbd_encoder_cfg = None
                  ):
         super().__init__()
-        self.top_rgb_image_key = 'top_img'
-        self.top_depth_image_key = 'top_depth'
-        self.right_rgb_image_key = 'right_img'
-        self.right_depth_image_key = 'right_depth'
+        self.top_rgbd_key = 'top_rgbd'
+        # self.top_depth_image_key = 'top_depth'
+        self.right_rgbd_key = 'right_rgbd'
+        # self.right_depth_image_key = 'right_depth'
         self.state_key = 'agent_pos'
+        self.camera_num = camera_num
         
-        self.n_output_channels = out_channel
-        self.camera_num = 2
+        # self.n_output_channels = out_channel
         
-        self.top_rgb_image_shape = observation_space[self.top_rgb_image_key]
-        self.right_rgb_image_shape = observation_space[self.right_rgb_image_key]
-        self.top_depth_image_shape = observation_space[self.top_depth_image_key]
-        self.right_depth_image_shape = observation_space[self.right_depth_image_key]
+        self.top_rgb_image_shape = observation_space[self.top_rgbd_key]
+        self.right_rgb_image_shape = observation_space[self.right_rgbd_key]
         self.state_shape = observation_space[self.state_key]
 
             
         
         
-        cprint(f"[DP3Encoder] top rgb image shape: {self.top_rgb_image_shape}", "yellow")
-        cprint(f"[DP3Encoder] right rgb image shape: {self.right_rgb_image_shape}", "yellow")
-        cprint(f"[DP3Encoder] top depth image shape: {self.top_depth_image_shape}", "yellow")
-        cprint(f"[DP3Encoder] right depth image shape: {self.right_depth_image_shape}", "yellow")
+        cprint(f"[DP3Encoder] top rgbd shape: {self.top_rgb_image_shape}", "yellow")
+        cprint(f"[DP3Encoder] right rgbd shape: {self.right_rgb_image_shape}", "yellow")
         cprint(f"[DP3Encoder] state shape: {self.state_shape}", "yellow")
-        cprint("[DP3Encoder] rgbd_network_backbone: {}".format(rgbd_network_backbone), 'yellow')
         
-
-        # self.rgbd_network_backbone = rgbd_network_backbone
-        # if rgbd_network_backbone == 'DFormer_Tiny':
-        #     self.extractor = DFormer_Tiny(pretrained = True)
-        # elif rgbd_network_backbone == 'DFormer_Small':
-        #     self.extractor = DFormer_Small(pretrained = True)
-        # elif rgbd_network_backbone == 'DFormer_Base':
-        #     self.extractor = DFormer_Base(pretrained = True)
-        # elif rgbd_network_backbone == 'DFormer_Large':
-        #     self.extractor = DFormer_Large(pretrained = True)
-        # else:
-        #     raise NotImplementedError(f"rgbd_network_backbone: {rgbd_network_backbone}")
-        # del self.extractor.pred
-        # self.extractor.eval()
-        # # self.extractor.requires_grad_(False)
-        # for p in self.extractor.parameters():
-        #     p.requires_grad = False
-        
-
-        self.rgbd_encoder = CLVE(**rgbd_encoder_cfg)
+        if rgbd_encoder_cfg.load_rgbd_encoder:
+            self.rgbd_encoder = self.rgbd_encoder_load_checkpoint(path=rgbd_encoder_cfg.checkpoint_path)
+        else:
+            self.rgbd_encoder = CLVE(rgbd_encoder_cfg)
         if len(state_mlp_size) == 0:
             raise RuntimeError(f"State mlp size is empty")
         elif len(state_mlp_size) == 1:
@@ -224,31 +204,43 @@ class DP3Encoder(nn.Module):
             net_arch = state_mlp_size[:-1]
         output_dim = state_mlp_size[-1]
 
-        self.n_output_channels  += output_dim
+        self.n_output_channels  = self.camera_num * rgbd_encoder_cfg.out_channels + output_dim
         self.state_mlp = nn.Sequential(*create_mlp(self.state_shape[0], output_dim, net_arch, state_mlp_activation_fn))
 
         cprint(f"[DP3Encoder] output dim: {self.n_output_channels}", "red")
 
 
     def forward(self, observations: Dict) -> torch.Tensor:
-        top_img = observations[self.top_rgb_image_key]
-        top_depth = observations[self.top_depth_image_key]
-        right_img = observations[self.right_rgb_image_key]
-        right_depth = observations[self.right_depth_image_key]
-        top_vision = torch.cat([top_img,top_depth],dim=1)
-        right_vision = torch.cat([right_img,right_depth], dim=1)
-        assert len(top_vision.shape) == 4, cprint(f"top vision shape: {top_vision.shape}, length should be 4", "red")
-        assert len(right_vision.shape) == 4, cprint(f"right vision shape: {right_vision.shape}, length should be 4", "red")
+        top_rgbd = observations[self.top_rgbd_key]
+        # top_depth = observations[self.top_depth_image_key]
+        right_rgbd = observations[self.right_rgbd_key]
+        # right_depth = observations[self.right_depth_image_key]
+        # top_vision = torch.cat([top_img,top_depth],dim=1)
+        # right_vision = torch.cat([right_img,right_depth], dim=1)
+        assert len(top_rgbd.shape) == 4, cprint(f"top vision shape: {top_rgbd.shape}, length should be 4", "red")
+        assert len(right_rgbd.shape) == 4, cprint(f"right vision shape: {right_rgbd.shape}, length should be 4", "red")
         with torch.no_grad():
-            top_vision_feat = self.extractor(top_vision)    # B * Dformer_out_dim
-            right_vision_feat = self.extractor(right_vision)    # B * Dformer_out_dim
-        rgbd_feat = self.rgbd_encoder(torch.cat([top_vision_feat, right_vision_feat], dim=-1)) # B* encoder_out_dim
+            top_vision_feat = self.rgbd_encoder(top_rgbd)    # B * Dformer_out_dim
+            right_vision_feat = self.rgbd_encoder(right_rgbd)    # B * Dformer_out_dim
+        # rgbd_feat = self.rgbd_encoder(torch.cat([top_vision_feat, right_vision_feat], dim=-1)) # B* encoder_out_dim
             
         state = observations[self.state_key]
         state_feat = self.state_mlp(state)  # B * encoder_out_dim
-        final_feat = torch.cat([rgbd_feat, state_feat], dim=-1)
+        final_feat = torch.cat([top_vision_feat, right_vision_feat, state_feat], dim=-1)
         return final_feat
 
 
     def output_shape(self):
         return self.n_output_channels
+    
+    def rgbd_encoder_load_checkpoint(self, path='/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/checkpoints'):
+        checkpoints = torch.load(path, weights_only=False)
+
+        clve_model = checkpoints['CLVE.pth'].image_encoder
+
+        clve_model.eval()
+        # self.extractor.requires_grad_(False)
+        for p in clve_model.parameters():
+            p.requires_grad = False
+
+        return clve_model

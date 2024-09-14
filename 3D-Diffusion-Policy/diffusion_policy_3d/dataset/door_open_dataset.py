@@ -79,18 +79,18 @@ class DoorOpenDataset(BaseDataset):
 
     def _sample_to_data(self, sample):
         agent_pos = sample['state'][:,].astype(np.float32) # (agent_posx2, block_posex3)
-        top_img = sample['top_img'][:,].astype(np.float32)
-        top_depth = sample['top_depth'][:,].astype(np.float32)
-        right_img = sample['right_img'][:,].astype(np.float32)
-        right_depth = sample['right_depth'][:,].astype(np.float32)
+        top_rgbd = sample['top_rgbd'][:,].astype(np.float32)
+        # top_depth = sample['top_depth'][:,].astype(np.float32)
+        right_rgbd = sample['right_rgbd'][:,].astype(np.float32)
+        # right_depth = sample['right_depth'][:,].astype(np.float32)
         # point_cloud = sample['point_cloud'][:,].astype(np.float32) # (T, 1024, 6)
 
         data = {
             'obs': {
-                'top_img': top_img, # T, 3, 224, 224
-                'top_depth': top_depth, # T, 1, 224, 224
-                'right_img': right_img, # T, 3, 224, 224
-                'right_depth': right_depth, # T, 1, 224, 224
+                'top_rgbd': top_rgbd, # T, 4, 224, 224
+                # 'top_depth': top_depth, # T, 1, 224, 224
+                'right_rgbd': right_rgbd, # T, 4, 224, 224
+                # 'right_depth': right_depth, # T, 1, 224, 224
                 'agent_pos': agent_pos, # T, D_pos
             },
             'action': sample['action'].astype(np.float32) # T, D_action

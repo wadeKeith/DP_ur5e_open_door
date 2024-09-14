@@ -27,7 +27,7 @@ policy:
   - 512
   - 1024
   - 2048
-  encoder_output_dim: 64
+  # encoder_output_dim: 64
   horizon: ${horizon}
   kernel_size: 5
   n_action_steps: ${n_action_steps}
@@ -52,11 +52,13 @@ policy:
 
   # rgbd_network_backbone: 
 
-
+  camera_num: 2
   rgbd_encoder_cfg:
+    load_rgbd_encoder: true
+    checkpoint_path: "/home/zxr/Documents/Github/DP_ur5e_open_door/3D-Diffusion-Policy/checkpoints/clve_last_step_ckpt.pth"
     rgbd_network_backbone: "DFormer_Base"
     num_heads: 8
-    out_channels: ${policy.encoder_output_dim}
+    out_channels: 64
     num_layers_clve_attentive: 12
     dropout: 0.1
 
@@ -70,7 +72,7 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 8
   shuffle: True
   pin_memory: True

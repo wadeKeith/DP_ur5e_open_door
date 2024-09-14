@@ -8,18 +8,12 @@ shape_meta: &shape_meta
     # point_cloud:
     #   shape: [512, 3]
     #   type: point_cloud
-    top_img:
-      shape: [3, 224, 224]
-      type: top_img
-    top_depth:
-      shape: [1, 224, 224]
-      type: top_depth
-    right_img:
-      shape: [3, 224, 224]
-      type: right_img
-    right_depth:
-      shape: [1, 224, 224]
-      type: right_depth
+    top_rgbd:
+      shape: [4, 224, 224]
+      type: top_rgbd
+    right_rgbd:
+      shape: [4, 224, 224]
+      type: right_rgbd
     agent_pos:
       shape: [7]
       type: low_dim

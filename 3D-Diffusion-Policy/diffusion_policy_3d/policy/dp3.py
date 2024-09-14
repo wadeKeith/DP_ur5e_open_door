@@ -34,9 +34,10 @@ class DP3(BasePolicy):
             use_down_condition=True,
             use_mid_condition=True,
             use_up_condition=True,
-            encoder_output_dim=256,
+            # encoder_output_dim=256,
+            camera_num = 1,
             rgbd_encoder_cfg=None,
-            rgbd_network_backbone = "DFormer_Base",
+            # rgbd_network_backbone = "DFormer_Base",
             # parameters passed to step
             **kwargs):
         super().__init__()
@@ -57,10 +58,11 @@ class DP3(BasePolicy):
         obs_dict = dict_apply(obs_shape_meta, lambda x: x['shape'])
 
 
-        self.rgbd_network_backbone = rgbd_network_backbone
+        # self.rgbd_network_backbone = rgbd_network_backbone
         obs_encoder = DP3Encoder(observation_space=obs_dict,
-                                                out_channel=encoder_output_dim,
-                                                rgbd_network_backbone=rgbd_network_backbone,
+                                                # out_channel=encoder_output_dim,
+                                                camera_num = camera_num,
+                                                # rgbd_network_backbone=rgbd_network_backbone,
                                                 rgbd_encoder_cfg = rgbd_encoder_cfg,
                                                 )
 
